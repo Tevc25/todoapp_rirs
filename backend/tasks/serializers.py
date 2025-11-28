@@ -2,7 +2,6 @@ from rest_framework import serializers
 from .models import Task
 
 class TaskSerializer(serializers.ModelSerializer):
-    # KLJUČNO: ID kot string, da JS ne izgubi natančnosti
     id = serializers.CharField(read_only=True)
 
     assigned_to_id = serializers.IntegerField(required=False, allow_null=True)
