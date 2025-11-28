@@ -14,5 +14,5 @@
     "baseUrl": ".",
     "types": ["vitest/globals"]
   },
-  "include": ["src", "vite.config.ts", "vitest.setup.ts"]
+  "include": ["src", "vite.config.ts", "vitest.config.ts", "vitest.setup.ts"]
 }
