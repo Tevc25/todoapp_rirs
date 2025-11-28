@@ -6,6 +6,18 @@ const mockGet = vi.fn();
 const mockPost = vi.fn();
 const mockDelete = vi.fn();
 
+type MockTask = {
+  id: string;
+  title: string;
+  done: boolean;
+  due_date: string | null;
+  created_by_username?: string;
+  assigned_to_id?: number | null;
+  assigned_to_username?: string | null;
+};
+
+type MockUser = { id: number; username: string };
+
 vi.mock("../api", () => ({
   __esModule: true,
   default: {
@@ -22,7 +34,7 @@ describe("Tasks component", () => {
     mockDelete.mockReset();
   });
 
-  function setupLoad(tasks = [], users = []) {
+  function setupLoad(tasks: MockTask[] = [], users: MockUser[] = []) {
     mockGet.mockImplementation((url: string) => {
       if (url === "/api/tasks/") return Promise.resolve({ data: tasks });
       if (url === "/api/users/") return Promise.resolve({ data: users });
