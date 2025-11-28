@@ -11,7 +11,8 @@
     "isolatedModules": true,
     "noEmit": true,
     "strict": true,
-    "baseUrl": "."
+    "baseUrl": ".",
+    "types": ["vitest/globals"]
   },
-  "include": ["src"]
+  "include": ["src", "vite.config.ts", "vitest.config.ts", "vitest.setup.ts"]
 }
