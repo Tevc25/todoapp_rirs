@@ -14,13 +14,13 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_DB: pts_auth
-          POSTGRES_USER: pts_user
-          POSTGRES_PASSWORD: pts_pass_123
+          POSTGRES_DB: ${{ secrets.PG_DB_NAME }}
+          POSTGRES_USER: ${{ secrets.PG_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.PG_PASSWORD }}
         ports:
           - 5432:5432
         options: >-
-          --health-cmd="pg_isready -U pts_user -d pts_auth"
+          --health-cmd="pg_isready -U ${PG_USER} -d ${PG_DB_NAME}"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
@@ -66,5 +66,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
         run: npm ci
+      - name: Test
+        run: npm test -- --runInBand
       - name: Build
         run: npm run build
