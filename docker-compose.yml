@@ -1,0 +1,52 @@
+name: todoapp_rirs
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: pts_auth
+      POSTGRES_USER: pts_user
+      POSTGRES_PASSWORD: pts_pass_123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pts_user -d pts_auth"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  backend:
+    build: ./backend
+    environment:
+      DJANGO_SECRET_KEY: dev-secret-change-me
+      DJANGO_DEBUG: "1"
+      ALLOWED_HOSTS: "*"
+      CORS_ALLOW_ALL: "true"
+      FRONTEND_ORIGIN: http://localhost:5173
+
+      PG_DB_NAME: pts_auth
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_USER: pts_user
+      PG_PASSWORD: pts_pass_123
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    environment:
+      VITE_API_BASE: http://localhost:8000
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "5173:5173"
+
+volumes:
+  postgres-data:
