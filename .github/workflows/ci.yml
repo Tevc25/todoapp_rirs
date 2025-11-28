@@ -47,7 +47,7 @@ jobs:
       - name: Run migrations
         run: python manage.py migrate --noinput
       - name: Run tests
-        run: python manage.py test
+        run: python manage.py test -v 2
 
   frontend:
     name: Frontend (React/Vite)
@@ -67,6 +67,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Test
-        run: npm test -- --runInBand
+        run: npm test
       - name: Build
         run: npm run build
