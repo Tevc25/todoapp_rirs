@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 function getInitialTheme() {
   const saved = localStorage.getItem("theme");
   if (saved === "light" || saved === "dark") return saved;
-  // če ni shranjeno, uporabi sistemsko nastavitev
   const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
   return prefersDark ? "dark" : "light";
 }
@@ -24,7 +23,7 @@ export default function App() {
       <header className="app-header">
         <div className="logo">
           <div className="logo-badge">✓</div>
-          <div>PTS Todo</div>
+          <div>RIRS Todo App</div>
         </div>
 
         <nav className="nav">
