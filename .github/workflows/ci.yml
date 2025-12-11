@@ -149,3 +149,33 @@ jobs:
           file: ./frontend/Dockerfile
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/todoapp-frontend:latest
+
+  deploy-backend:
+    name: Deploy backend to Render
+    runs-on: ubuntu-latest
+    needs: docker   # počakamo, da so Docker image-i buildani & pushani
+    steps:
+      - name: Trigger Render deploy hook
+        run: curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
+
+  deploy-frontend:
+    name: Deploy frontend to Vercel
+    runs-on: ubuntu-latest
+    needs: deploy-backend   # najprej backend, potem frontend (da FE že kaže na delujoč BE)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Deploy to Vercel (prod)
+        working-directory: frontend
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: vercel --prod --confirm

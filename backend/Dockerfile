@@ -14,8 +14,8 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY . /app
 
 CMD bash -lc '\
-  echo "Waiting for postgres:5432..." && \
-  until nc -z postgres 5432; do sleep 0.5; done; \
+  echo "Waiting for $PG_HOST:$PG_PORT..." && \
+  until nc -z $PG_HOST $PG_PORT; do sleep 0.5; done; \
   echo "Postgres is up."; \
   python manage.py migrate && \
   gunicorn pts_backend.wsgi:application --bind 0.0.0.0:8000 \
