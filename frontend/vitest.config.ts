@@ -8,5 +8,11 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: "./vitest.setup.ts",
     globals: true,
+
+    coverage: {
+      provider: "istanbul",
+      reporter: ["text", "lcov", "clover", "json"],
+      reportsDirectory: "coverage",
+    },
   },
 });
