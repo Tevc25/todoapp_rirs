@@ -6,6 +6,15 @@ on:
   pull_request:
     branches: [ main, pre-production, production ]
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   backend:
     name: Backend (Django)
@@ -37,21 +46,51 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Cache backend pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
       - name: Run migrations
         run: python manage.py migrate --noinput
-      - name: Run tests
-        run: python manage.py test -v 2
+
+      - name: Run tests with coverage
+        run: |
+          python -m coverage run manage.py test -v 2
+          mkdir -p coverage
+          python -m coverage xml -o coverage/coverage.xml
+          python -m coverage html -d coverage/html
+
+      - name: Upload backend coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage
+
+      - name: Upload backend build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-build
+          path: backend
+
 
   frontend:
     name: Frontend (React/Vite)
     runs-on: ubuntu-latest
+    needs: backend
     defaults:
       run:
         working-directory: frontend
@@ -59,14 +98,170 @@ jobs:
       VITE_API_BASE: ${{ secrets.VITE_API_BASE }}
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+
       - name: Install dependencies
         run: npm ci
+
       - name: Test
-        run: npm test
+        run: npm run test:ci
+
       - name: Build
         run: npm run build
+
+      - name: Upload frontend build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+      - name: Upload frontend coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage
+
+
+  # ----------------------------
+  # GitHub Pages (statična stran iz ./site)
+  # Deploy samo na push v main (PRji naj ne deployajo).
+  # ----------------------------
+  pages:
+    name: Deploy GitHub Pages
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact (site/)
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./site
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
+
+
+  # ----------------------------
+  # Development environment: main -> Docker tag :dev
+  # ----------------------------
+  docker-dev:
+    name: Build & push Docker images (dev)
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: Development
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build & push backend image (dev)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/todoapp-backend:dev
+
+      - name: Build & push frontend image (dev)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/todoapp-frontend:dev
+
+
+  # ----------------------------
+  # Production environment: production -> Docker tag :prod + manual approval (environment rules)
+  # ----------------------------
+  docker-prod:
+    name: Build & push Docker images (prod)
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/production'
+    environment: Production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build & push backend image (prod)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/todoapp-backend:prod
+
+      - name: Build & push frontend image (prod)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/todoapp-frontend:prod
+
+
+  # ----------------------------
+  # Deploy backend to Render (ostane samo za main)
+  # ----------------------------
+  deploy-backend:
+    name: Deploy backend to Render
+    runs-on: ubuntu-latest
+    needs: docker-dev
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Trigger Render deploy hook
+        run: curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
+
+
+  # ----------------------------
+  # Deploy frontend to Vercel (ostane samo za main)
+  # ----------------------------
+  deploy-frontend:
+    name: Deploy frontend to Vercel
+    runs-on: ubuntu-latest
+    needs: deploy-backend
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Deploy to Vercel (prod)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          vercel --prod --yes --token "$VERCEL_TOKEN"
